@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Workspace } from '@/components/workspace/Workspace';
 import { FileExplorer } from '@/components/workspace/FileExplorer';
 import { Header } from '@/components/layout/Header';
@@ -8,20 +8,28 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import { useToast } from '@/hooks/use-toast';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { PromptPanel } from '@/components/workspace/PromptPanel';
+import { ChatPanel } from '@/components/workspace/ChatPanel';
 
 // Type for diff state
 type DiffStateType = {
   diff: string | null;
-  old_code: string | null;
-  new_code: string | null;
+  old_code?: string | null; // Optional, might not always be sent
+  new_code?: string | null; // Optional
+};
+
+// Type for chat messages (can be expanded)
+type ChatMessage = {
+  id: string; // For key prop
+  role: 'user' | 'agent' | 'system';
+  content: string;
 };
 
 export default function Home() {
-  // Simplified state - only what the UI needs
   const [files, setFiles] = useState<string[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [editorValues, setEditorValues] = useState<Record<string, string>>({}); // Tracks unsaved editor content
+  const [editorValues, setEditorValues] = useState<Record<string, string>>({}); // Tracks editor content per file
   const { toast } = useToast();
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); // Restore chat state
 
   const {
     connect,
@@ -30,81 +38,85 @@ export default function Home() {
     connectionStatus
   } = useWebSocket();
 
-  // File-specific diff states
   const [diffStates, setDiffStates] = useState<Record<string, DiffStateType>>({});
+  const [validationError, setValidationError] = useState<string | null>(null); // Keep for potential backend errors
+  const [isProcessing, setIsProcessing] = useState(false); 
 
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false); // State to track AI processing
-
+  // Connect WebSocket on mount
   useEffect(() => {
     connect();
   }, [connect]);
 
-  useEffect(() => {
-    if (connectionStatus === 'connected') {
-      // Always fetch the current file list from backend
-      sendMessage({ action: 'list_files' });
-    }
-  }, [connectionStatus, sendMessage]);
+  // Removed effect that requested list_files on connect, backend sends initial_state now
+  // Removed effect that auto-selected files[0], handled by initial_state and file_created
 
-  // When the file list changes and we don't have an active file yet,
-  // automatically select the first file (which should be agent.based)
-  useEffect(() => {
-    if (files.length > 0 && !activeFile) {
-      const firstFile = files[0];
-      setActiveFile(firstFile);
-      sendMessage({ action: 'read_file', filename: firstFile });
-    }
-  }, [files, activeFile, sendMessage]); // Depend on files and activeFile
-
+  // Main message handler
   useEffect(() => {
     if (!lastMessage) return;
 
-    const data = JSON.parse(lastMessage);
-
-    if (data.status === 'error') {
-      // Handle specific errors differently if needed
-      if (data.action === 'apply_diff') {
-        toast({
-          title: 'Diff Apply Failed',
-          description: data.error,
-          variant: 'destructive',
-        });
-        // Optionally clear the diff state for the file on error
-        if (data.filename) {
-           setDiffStates(prev => {
-             const newStates = { ...prev };
-             delete newStates[data.filename];
-             return newStates;
-           });
-        }
-      } else {
-        setValidationError(data.error);
-        toast({
-          title: 'Error',
-          description: data.error,
-          variant: 'destructive',
-        });
-      }
-      setIsProcessing(false); // Stop processing on any error
-      return;
-    } else if (validationError !== null) {
-      // Clear general validation error on any success
-      setValidationError(null);
+    let data;
+    try {
+        data = JSON.parse(lastMessage);
+    } catch (e) {
+        console.error("Failed to parse WebSocket message:", lastMessage, e);
+        // Wrap toast call in setTimeout
+        setTimeout(() => {
+            toast({ title: "WebSocket Error", description: "Received invalid message format.", variant: "destructive" });
+        }, 0);
+        setIsProcessing(false);
+        return;
     }
 
+    if (data.status === 'error') {
+      setValidationError(data.error); 
+      // Wrap toast call in setTimeout
+      setTimeout(() => {
+          toast({
+            title: `Error (${data.action || 'General'})`,
+            description: data.error,
+            variant: 'destructive',
+          });
+      }, 0);
+      setIsProcessing(false); 
+      if (data.action === 'apply_diff_error' && data.filename) {
+         setDiffStates(prev => {
+           const newStates = { ...prev };
+           delete newStates[data.filename];
+           return newStates;
+         });
+      }
+      return;
+    } else {
+      if (validationError) setValidationError(null); 
+    }
+
+    // --- Handle Success Messages by Action --- 
     switch (data.action) {
-      case 'list_files':
-        setFiles(data.files);
+      case 'initial_state':
+        setFiles(data.files || []);
+        // Don't automatically select a file here, wait for user or file_created
+        setActiveFile(null); 
+        setEditorValues({}); // Clear editor values on reconnect/initial state
+        setDiffStates({}); // Clear diffs
+        setChatMessages([]); // Restore chat state update
+        setIsProcessing(false);
         break;
-      case 'read_file':
-        // Update editor value only for the active file being read
-        if (data.filename === activeFile) {
+
+      case 'file_list': // Backend confirms file list (e.g., after manual upload/delete)
+        setFiles(data.files || []);
+        // If active file no longer exists, deactivate it
+        if (activeFile && !data.files?.includes(activeFile)) {
+          setActiveFile(null);
+        }
+        break;
+
+      case 'file_content': // Response to read_file request
+        if (data.filename && data.filename === activeFile) {
           setEditorValues(prev => ({
             ...prev,
-            [data.filename]: data.content
+            [data.filename]: data.content ?? '' // Use empty string if content is null/undefined
           }));
-          // Ensure diff state is cleared if we re-read a file that had a diff
+          // Clear diff state when explicitly reading/loading file content
           if (diffStates[data.filename]) {
             setDiffStates(prev => {
               const newStates = { ...prev };
@@ -114,71 +126,86 @@ export default function Home() {
           }
         }
         break;
-      case 'prompt':
-        setIsProcessing(false); // Stop processing after prompt response
-        if (data.code) {
-          const filename = data.filename || activeFile || 'agent.based';
-          setEditorValues(prev => ({
-            ...prev,
-            [filename]: data.code
-          }));
 
-          // Refresh file list to make sure UI is in sync with backend
-          sendMessage({ action: 'list_files' });
-
-          if (!activeFile) {
-            setActiveFile(filename);
-          }
-        }
-        break;
-      case 'generate_diff':
-        setIsProcessing(false); // Stop processing after diff response
-        // Diff generated for a specific file (use activeFile as fallback)
-        const diffFilename = data.filename || activeFile;
-        if (diffFilename && data.diff) {
-           setDiffStates(prev => ({
-             ...prev,
-             [diffFilename]: {
-               diff: data.diff,
-               old_code: data.old_code || '',
-               new_code: data.new_code || '',
-             }
-           }));
-        }
-        break;
-      case 'apply_diff':
-        // Diff applied successfully on backend for data.filename
-        setDiffStates(prev => {
-          const newStates = { ...prev };
-          delete newStates[data.filename]; // Clear diff for this file
-          return newStates;
-        });
-        // Update editor content with the new code from backend
+      case 'file_created': // AI created a new file
+        setFiles(data.files || []); // Update file list from backend
+        setActiveFile(data.filename);
         setEditorValues(prev => ({
           ...prev,
-          [data.filename]: data.new_code
+          [data.filename]: data.content ?? ''
         }));
+        setIsProcessing(false);
+        // Optional: Add a system message to chat
+        setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Created file: ${data.filename}` }]); // Restore chat state update
         break;
-      case 'upload_file':
-        // File was successfully created or updated on the backend.
-        // Refresh the file list to ensure UI consistency.
-        sendMessage({ action: 'list_files' });
-        // If this upload corresponds to the currently active file (likely just created),
-        // immediately fetch its content.
-        if (data.filename === activeFile) {
-          sendMessage({ action: 'read_file', filename: data.filename });
+
+      case 'diff_generated': // AI generated a diff for the active file
+        if (data.filename && data.diff) {
+           setDiffStates(prev => ({
+             ...prev,
+             [data.filename]: {
+               diff: data.diff,
+               old_code: data.old_code, 
+               new_code: data.new_code,
+             }
+           }));
+           // Add system message to chat
+           setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Diff generated for ${data.filename}. Review the changes.` }]);
+        }
+        setIsProcessing(false);
+        break;
+        
+      case 'diff_applied': // Diff was successfully applied on the backend
+        if (data.filename) {
+          // Clear diff state is handled first
+          setDiffStates(prev => {
+            const newStates = { ...prev };
+            delete newStates[data.filename]; 
+            return newStates;
+          });
+          // Update editor content
+          setEditorValues(prev => ({
+            ...prev,
+            [data.filename]: data.new_code ?? ''
+          }));
+          // Add system message to chat
+          setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Changes applied to ${data.filename}.` }]);
+           // Toast is deferred
+           setTimeout(() => {
+                toast({ title: "Diff Applied", description: `Changes applied to ${data.filename}` });
+           }, 0);
         }
         break;
+        
+      case 'file_uploaded': // User manually uploaded/created/saved a file
+        setFiles(data.files || []); // Update list from backend
+        // No need to setActiveFile or load content here, 
+        // handleFileSelect or handleCreateFile already manage the active state/content.
+        // Toast notification is handled in handleSaveFile/handleCreateFile
+        break;
+
+      // Add cases for backend error actions if needed for specific UI feedback
+      case 'edit_error':
+      case 'apply_diff_error':
+        // Error toast is already handled by the generic error handling block
+        setIsProcessing(false);
+        break;
+
+      default:
+        console.warn("Received unknown WebSocket action:", data.action);
     }
-  }, [lastMessage, toast, activeFile, sendMessage]); // Added diffStates dependency
+  }, [lastMessage, toast, sendMessage]); 
 
-  const handleFileSelect = (filename: string) => {
-    if (filename === activeFile) return;
+  // Wrap sendMessage in useCallback to prevent re-renders of child components
+  const stableSendMessage = useCallback(sendMessage, [sendMessage]);
 
-    const fileToSave = activeFile; // Store the file we are leaving
+  const handleFileSelect = useCallback((filename: string) => {
+    if (filename === activeFile || isProcessing) return; // Prevent switching while processing
+
+    const fileToSave = activeFile; 
     const currentContent = fileToSave ? editorValues[fileToSave] : undefined;
 
-    // Clear diff state for the file being left, if any
+    // Clear diff state for the file being left
     if (fileToSave && diffStates[fileToSave]) {
        setDiffStates(prev => {
           const newStates = { ...prev };
@@ -187,172 +214,204 @@ export default function Home() {
        });
     }
 
-    // Save current file's content ONLY if it was edited
-    // Simple check: does editorValues have an entry for this file?
-    // A more robust check would compare against the last known saved state.
+    // Auto-save the file being left if its content exists in editorValues (basic check)
     if (fileToSave && currentContent !== undefined) { 
-       sendMessage({
+       stableSendMessage({
            action: 'upload_file',
            filename: fileToSave,
            content: currentContent,
        });
-       // Auto-save toast
        toast({
-        title: 'File saved',
-        description: `${fileToSave} has been saved.`,
+        title: 'Auto-saved',
+        description: `${fileToSave} saved.`,
        });
     }
 
     // Switch to new file and load its content
     setActiveFile(filename);
-    sendMessage({ action: 'read_file', filename });
-  };
+    setEditorValues(prev => ({ ...prev, [filename]: prev[filename] ?? "Loading..." })); // Show loading indicator
+    stableSendMessage({ action: 'read_file', filename });
+  }, [activeFile, isProcessing, editorValues, diffStates, stableSendMessage, toast]);
 
- const handleCreateFile = (filename: string) => {
-    if (!filename.endsWith('.based')) {
-      filename = `${filename}.based`;
+  // Handles prompt submission from PromptPanel
+  const handlePromptSubmit = useCallback((prompt: string) => {
+    if (!prompt.trim() || isProcessing) return;
+
+    setIsProcessing(true);
+    setValidationError(null); 
+    // Add user prompt to chat display
+    setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: prompt }]); // Restore chat state update
+
+    stableSendMessage({
+      action: 'prompt',
+      prompt: prompt.trim(),
+      activeFile: activeFile, 
+    });
+  }, [isProcessing, activeFile, stableSendMessage]);
+
+ // For manual file creation (e.g., File > New or explorer button)
+ const handleCreateFile = useCallback((filename: string) => {
+    if (isProcessing) return; // Prevent creation while processing
+    let newFilename = filename.trim();
+    if (!newFilename) {
+        toast({ title: "Invalid Name", description: "Filename cannot be empty.", variant: "destructive" });
+        return;
     }
-    const newFilename = filename; // Use a constant for clarity
-
-    // Optimistically add the file to the frontend list
-    if (!files.includes(newFilename)) {
-      setFiles(prev => [...prev, newFilename]);
+    if (!newFilename.endsWith('.based')) {
+      newFilename = `${newFilename}.based`;
+    }
+    if (files.includes(newFilename)) {
+      toast({ title: "File Exists", description: `'${newFilename}' already exists.`, variant: "destructive" });
+      return;
     }
 
-    // Set the new file as active 
+    // Optimistically update UI
+    setFiles(prev => [...prev, newFilename]);
     setActiveFile(newFilename);
-    setEditorValues(prev => ({ ...prev, [newFilename]: '' })); // Set empty content locally
+    setEditorValues(prev => ({ ...prev, [newFilename]: '' })); // Set empty content
+    setDiffStates(prev => {
+        const newStates = { ...prev };
+        delete newStates[newFilename]; // Ensure no old diff state persists
+        return newStates;
+    });
 
-    // Create empty file on backend
-    sendMessage({
+    // Tell backend to create the empty file
+    stableSendMessage({
       action: 'upload_file',
       filename: newFilename,
       content: '' 
     });
-    // The backend confirmation will refresh the list, solidifying the state
-  };
+    toast({ title: "File Created", description: `'${newFilename}' created.` });
+  }, [files, isProcessing, stableSendMessage, toast]);
 
-  const handleSaveFile = (filename: string, content: string) => {
-    // Update backend with the latest content
-    sendMessage({
-      action: 'upload_file',
-      filename,
-      content
-    });
+  // For handling editor changes directly (updates local state)
+  const handleEditorChange = useCallback((filename: string, content: string) => {
+      setEditorValues(prev => ({
+          ...prev,
+          [filename]: content
+      }));
+      // If user edits a file with a pending diff, clear the diff
+      if (diffStates[filename]) {
+          setDiffStates(prev => {
+              const newStates = { ...prev };
+              delete newStates[filename];
+              return newStates;
+          });
+          toast({ title: "Diff Cleared", description: "Manual edits cleared the pending AI diff.", variant: "default" });
+      }
+  }, [diffStates, toast]);
 
-    // Update local editor state
-    setEditorValues(prev => ({
-      ...prev,
-      [filename]: content
-    }));
-    
-    // Clear diff state for this file if it existed
-    if (diffStates[filename]) {
-        setDiffStates(prev => {
-          const newStates = { ...prev };
-          delete newStates[filename];
-          return newStates;
-        });
+  // For explicitly saving the current file (e.g., Ctrl+S or button)
+  const handleSaveFile = useCallback(() => {
+    if (!activeFile || isProcessing) return;
+    const contentToSave = editorValues[activeFile];
+    if (contentToSave === undefined) {
+      // This shouldn't happen if a file is active, but defensively check
+      console.warn("Attempted to save file with no content loaded:", activeFile);
+      return;
     }
 
-    toast({
-      title: 'File saved',
-      description: `${filename} has been saved.`,
-     });
-  };
+    stableSendMessage({
+      action: 'upload_file',
+      filename: activeFile,
+      content: contentToSave
+    });
+
+    toast({ title: "File Saved", description: `'${activeFile}' saved.` });
+
+    // Clear diff state on explicit save
+    if (diffStates[activeFile]) {
+        setDiffStates(prev => {
+            const newStates = { ...prev };
+            delete newStates[activeFile!];
+            return newStates;
+        });
+    }
+  }, [activeFile, isProcessing, editorValues, diffStates, stableSendMessage, toast]);
+
+  // For applying a diff shown in the UI
+  const handleApplyDiff = useCallback((filename: string) => {
+    if (!diffStates[filename]?.diff || isProcessing) return;
+
+    // Add system message before sending request
+    setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Applying changes to ${filename}...` }]);
+    setIsProcessing(true); // Indicate processing for diff application
+    stableSendMessage({
+      action: 'apply_diff',
+      filename: filename,
+      diff: diffStates[filename]!.diff!
+    });
+  }, [diffStates, isProcessing, stableSendMessage]);
+
+  // Function to clear diff state for a given file
+  const handleClearDiff = useCallback((filename: string) => {
+      setDiffStates(prev => {
+          const newStates = { ...prev };
+          if (newStates[filename]) {
+              delete newStates[filename];
+              // Wrap toast in setTimeout
+              setTimeout(() => {
+                 toast({ title: "Diff Cleared", description: `Changes for ${filename} discarded.` });
+              }, 0);
+          }
+          return newStates;
+      });
+  }, [toast]);
+
+  // Determine current content to display (editor value or original if diff exists)
+  const currentFileContent = activeFile ? (diffStates[activeFile]?.old_code ?? editorValues[activeFile] ?? '') : '';
+  const currentDiff = activeFile ? diffStates[activeFile]?.diff : null;
 
   return (
-    <main className="flex flex-col h-screen bg-background">
+    <div className="flex flex-col h-screen">
       <Header connectionStatus={connectionStatus} />
-
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="flex-1 h-[calc(100vh-3.5rem)]"
-      >
-        <ResizablePanel
-          defaultSize={20}
-          minSize={15}
-          maxSize={30}
-          className="border-r border-border"
-        >
+      {/* Outer horizontal group: Explorer | Workspace | Chat */}
+      <ResizablePanelGroup direction="horizontal" className="flex-1 border-t">
+        {/* Left Panel: File Explorer */}
+        <ResizablePanel defaultSize={20} minSize={15} maxSize={30}>
           <FileExplorer
             files={files}
             activeFile={activeFile}
             onSelectFile={handleFileSelect}
-            onCreateFile={handleCreateFile}
           />
         </ResizablePanel>
-
-        <ResizableHandle />
-
-        <ResizablePanel defaultSize={80}>
-          {activeFile ? (
-            <Workspace
-              filename={activeFile}
-              content={editorValues[activeFile] || ''} // Base content for rendering logic
-              editorValue={editorValues[activeFile] || ''} // Value shown in editor
-              diff={diffStates[activeFile]?.diff || null} // Pass diff for the active file
-              oldCode={diffStates[activeFile]?.old_code || null} // Pass oldCode for the active file
-              newCode={diffStates[activeFile]?.new_code || null} // Pass newCode for the active file
-              onClearDiff={() => { // Clear diff for the *active* file
-                setDiffStates(prev => {
-                  const newStates = { ...prev };
-                  if (activeFile) delete newStates[activeFile];
-                  return newStates;
-                });
-              }}
-              onSave={handleSaveFile}
-              sendMessage={sendMessage}
-              validationError={validationError}
-              onEditorValueChange={val => {
-                if (activeFile) {
-                  setEditorValues(prev => ({ ...prev, [activeFile]: val }));
-                }
-              }}
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              Select a file or create a new one to get started.
-            </div>
-          )}
+        <ResizableHandle withHandle />
+        
+        {/* Middle Panel: Workspace ONLY */}
+        <ResizablePanel defaultSize={80} minSize={30}> {/* Adjusted size */}
+              <Workspace
+                filename={activeFile}
+                content={currentFileContent} 
+                diff={currentDiff} 
+                editorValue={activeFile ? editorValues[activeFile] ?? '' : ''}
+                oldCode={activeFile ? diffStates[activeFile]?.old_code : null}
+                newCode={activeFile ? diffStates[activeFile]?.new_code : null}
+                onEditorValueChange={(newContent) => {
+                  if (activeFile) { handleEditorChange(activeFile, newContent); }
+                }}
+                onSave={() => { if(activeFile) handleSaveFile(); }}
+                sendMessage={stableSendMessage} 
+                onClearDiff={() => { if(activeFile) handleClearDiff(activeFile); }}
+                validationError={validationError} 
+              />
         </ResizablePanel>
+        <ResizableHandle withHandle />
+
+        {/* Right Panel: Chat History - Commented out */}
+        <ResizablePanel defaultSize={25} minSize={20}>
+            <ChatPanel chatMessages={chatMessages} />
+        </ResizablePanel>
+
       </ResizablePanelGroup>
 
-      {/* Always render PromptPanel, fixed at the bottom */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[600px] max-w-[calc(100vw-2rem)] z-50">
-        <PromptPanel
-          isProcessing={isProcessing}
-          onSubmit={(prompt, context) => {
-            const currentActiveFile = activeFile || 'agent.based'; // Ensure we have a filename
-            const maybeContext = context ? { context } : {};
+       {/* PromptPanel: Fixed position */}
+       <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-3xl px-4 z-50">
+          <PromptPanel
+            onSubmit={handlePromptSubmit}
+            isProcessing={isProcessing}
+          />
+       </div>
 
-            // Determine if the active file is empty or not
-            const isActiveFileEmpty = !editorValues[currentActiveFile] || editorValues[currentActiveFile].trim() === '';
-
-            setIsProcessing(true); // Start processing before sending message
-            if (isActiveFileEmpty) {
-              // If file is empty, treat as initial prompt for that file
-              sendMessage({
-                action: 'prompt',
-                prompt,
-                filename: currentActiveFile,
-                ...maybeContext,
-              });
-              // Ensure the file becomes active if it wasn't (e.g., first prompt)
-              if (!activeFile) setActiveFile(currentActiveFile);
-            } else {
-              // If file has content, generate a diff
-              sendMessage({
-                action: 'generate_diff',
-                prompt,
-                filename: currentActiveFile, // Explicitly send filename for diff
-                current_code: editorValues[currentActiveFile],
-                ...maybeContext,
-              });
-            }
-          }}
-        />
-      </div>
-    </main>
+    </div>
   );
 }
