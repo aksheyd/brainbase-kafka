@@ -88,7 +88,7 @@ export default function Home() {
       }
       setIsProcessing(false); // Stop processing on any error
       return;
-    } else {
+    } else if (validationError !== null) {
       // Clear general validation error on any success
       setValidationError(null);
     }
@@ -170,7 +170,7 @@ export default function Home() {
         }
         break;
     }
-  }, [lastMessage, toast, activeFile, sendMessage, diffStates]); // Added diffStates dependency
+  }, [lastMessage, toast, activeFile, sendMessage]); // Added diffStates dependency
 
   const handleFileSelect = (filename: string) => {
     if (filename === activeFile) return;
