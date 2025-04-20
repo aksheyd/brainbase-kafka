@@ -8,28 +8,6 @@ import { Send, HelpCircle, Plus, Loader2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpModal } from './HelpModal';
 
-// Sleek shadcn-style input for the main prompt
-interface SleekInputProps {
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  inputRef: React.RefObject<HTMLInputElement>;
-  placeholder: string;
-}
-
-function SleekInput({ value, onChange, onKeyDown, inputRef, placeholder }: SleekInputProps) {
-  return (
-    <Input
-      ref={inputRef}
-      value={value}
-      onChange={onChange}
-      onKeyDown={onKeyDown}
-      placeholder={placeholder}
-      className="rounded-full px-5 py-2 text-base shadow-sm border border-input bg-background focus:ring-2 focus:ring-ring focus:outline-none transition-all"
-    />
-  );
-}
-
 type PromptPanelProps = {
   onSubmit: (prompt: string, context?: string) => void;
   isProcessing?: boolean;
