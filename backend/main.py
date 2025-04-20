@@ -8,7 +8,9 @@ import sys
 sys.path.append(".")
 from agent.agent import BasedAgent
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+
+# Import apply_patch if needed directly here, or handle within agent
+# from unified_diff import apply_patch
 
 app = FastAPI()
 agent = BasedAgent()
@@ -25,191 +27,329 @@ logger = logging.getLogger("backend")
 sessions = {}
 
 
-class GenerateRequest(BaseModel):
-    prompt: str
+# Remove or comment out old Pydantic models if HTTP endpoints are deprecated
+# class GenerateRequest(BaseModel):
+#     prompt: str
+# class GenerateResponse(BaseModel):
+#     code: str
+# class GenerateDiffRequest(BaseModel):
+#     current_code: str
+#     prompt: str
+# class GenerateDiffResponse(BaseModel):
+#     diff: str
 
+# Remove or comment out old HTTP endpoints if deprecated
+# @app.post("/generate")
+# def generate_based_code(request: GenerateRequest):
+#     # This logic is now likely handled within the websocket prompt action
+#     pass
 
-class GenerateResponse(BaseModel):
-    code: str
-
-
-class GenerateDiffRequest(BaseModel):
-    current_code: str
-    prompt: str
-
-
-class GenerateDiffResponse(BaseModel):
-    diff: str
-
-
-@app.post("/generate")
-def generate_based_code(request: GenerateRequest):
-    code = agent.generate_based_code(request.prompt)
-    return code
-
-
-@app.post("/generate-diff", response_model=GenerateDiffResponse)
-def generate_based_diff(request: GenerateDiffRequest):
-    diff = agent.generate_based_diff(request.current_code, request.prompt)
-    return GenerateDiffResponse(diff=diff)
+# @app.post("/generate-diff", response_model=GenerateDiffResponse)
+# def generate_based_diff(request: GenerateDiffRequest):
+#     # This logic is now likely handled within the websocket prompt action
+#     pass
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     session_id = id(websocket)
+    # Initialize workspace as empty, first file created by first prompt
     sessions[session_id] = {
         "messages": [],
-        "workspace": {
-            "agent.based": ""  # Initialize with an empty agent.based file
-        },
+        "workspace": {},
         "context": [],
     }
+    logger.info(
+        f"WebSocket connected for session {session_id}. Initial state: {sessions[session_id]}"
+    )
+
+    # Send initial empty file list to frontend
+    await websocket.send_json(
+        {
+            "status": "success",
+            "action": "initial_state",
+            "files": [],
+            "activeFile": None,  # No file active initially
+        }
+    )
+
     try:
         while True:
             msg = await websocket.receive_text()
             try:
                 data = json.loads(msg)
-                logger.info(f"Received action: {data.get('action')} | Data: {data}")
+                logger.info(f"Received message: {data}")  # Log entire message
             except Exception as e:
-                logger.error(f"Invalid JSON received: {msg}")
+                logger.error(f"Invalid JSON received: {msg}. Error: {e}")
                 await websocket.send_json(
                     {"status": "error", "error": f"Invalid JSON: {e}"}
                 )
                 continue
+
             action = data.get("action")
             response = {"status": "error", "error": "Unknown action"}
-            # Handle each action type
+
             if action == "prompt":
                 prompt = data.get("prompt", "")
-                context = data.get("context", "")
-                if context:
-                    sessions[session_id]["context"].append(context)
-                # Pass context and history to agent
-                code = agent.generate_based_code(
-                    prompt,
-                    sessions[session_id]["context"],
-                    history=sessions[session_id]["messages"],
-                )
-                sessions[session_id]["messages"].append(
-                    {"role": "user", "prompt": prompt, "context": context}
-                )
-                sessions[session_id]["messages"].append({"role": "agent", "code": code})
-                # Optionally update a file in workspace
-                filename = data.get("filename")
-                if filename:
-                    if filename in sessions[session_id]["workspace"]:
-                        logger.info(f"Updating file '{filename}' in workspace.")
-                        sessions[session_id]["workspace"][filename] = code
+                context = data.get("context", [])  # Use provided context or empty list
+                active_file = data.get("activeFile")  # Get active file from frontend
+
+                # Ensure context is always a list
+                current_context = sessions[session_id].get("context", [])
+                if context:  # Append new context if provided
+                    if isinstance(context, list):
+                        current_context.extend(context)
                     else:
-                        logger.warning(
-                            f"[WARN] Tried to update non-existent file: {filename}. Workspace files: {list(sessions[session_id]['workspace'].keys())}"
-                        )
-                response = {
-                    "status": "success",
-                    "action": "prompt",
-                    "code": code,
-                    "session": sessions[session_id],
-                }
-            elif action == "generate_diff":
-                prompt = data.get("prompt", "")
-                current_code = data.get("current_code", "")
-                context = data.get("context", "")
-                if context:
-                    sessions[session_id]["context"].append(context)
-                diff_result = agent.generate_based_diff(
-                    current_code,
-                    prompt,
-                    sessions[session_id]["context"],
-                    history=sessions[session_id]["messages"],
+                        current_context.append(context)
+                    sessions[session_id]["context"] = current_context
+
+                current_history = sessions[session_id]["messages"]
+                current_files = list(sessions[session_id]["workspace"].keys())
+
+                # --- Intent Classification ---
+                intent_result = agent.classify_prompt_intent(
+                    prompt=prompt,
+                    context=current_context,
+                    history=current_history,
+                    file_list=current_files,
                 )
-                # diff_result is a dict with keys: diff, new_code, old_code
-                response = {
-                    "status": "success",
-                    "action": "generate_diff",
-                    "diff": diff_result.get("diff"),
-                    "new_code": diff_result.get("new_code"),
-                    "old_code": diff_result.get("old_code"),
-                    "session": sessions[session_id],
+                intent = intent_result.get(
+                    "intent", "EDIT_FILE"
+                )  # Default to EDIT if classification fails
+
+                user_message_log = {
+                    "role": "user",
+                    "prompt": prompt,
+                    "context": context,
+                    "activeFile": active_file,
                 }
+                agent_response_log = None
+
+                # --- Handle based on Intent ---
+                if intent == "CREATE_FILE":
+                    description = intent_result.get(
+                        "description", prompt[:50]
+                    )  # Use description or part of prompt
+                    new_filename = agent.generate_filename(description)
+                    logger.info(
+                        f"Intent: CREATE_FILE. Generating filename: {new_filename}"
+                    )
+
+                    # Generate initial code
+                    initial_code = agent.generate_based_code(
+                        prompt=prompt,  # Use the original creation prompt
+                        context=current_context,
+                        history=current_history,  # History helps guide initial code
+                    )
+
+                    # Update workspace and log
+                    sessions[session_id]["workspace"][new_filename] = initial_code
+                    agent_response_log = {
+                        "role": "agent",
+                        "filename": new_filename,
+                        "code": initial_code,
+                    }
+
+                    # Send response to frontend
+                    response = {
+                        "status": "success",
+                        "action": "file_created",  # Specific action for frontend
+                        "filename": new_filename,
+                        "content": initial_code,
+                        "files": list(
+                            sessions[session_id]["workspace"].keys()
+                        ),  # Send updated file list
+                    }
+
+                elif intent == "EDIT_FILE":
+                    if (
+                        not active_file
+                        or active_file not in sessions[session_id]["workspace"]
+                    ):
+                        # If no file exists yet, treat as creation
+                        if not current_files:
+                            logger.warning(
+                                "EDIT_FILE intent but no files exist. Treating as CREATE_FILE."
+                            )
+                            description = intent_result.get("description", prompt[:50])
+                            new_filename = agent.generate_filename(description)
+                            initial_code = agent.generate_based_code(
+                                prompt, current_context, current_history
+                            )
+                            sessions[session_id]["workspace"][new_filename] = (
+                                initial_code
+                            )
+                            agent_response_log = {
+                                "role": "agent",
+                                "filename": new_filename,
+                                "code": initial_code,
+                            }
+                            response = {
+                                "status": "success",
+                                "action": "file_created",
+                                "filename": new_filename,
+                                "content": initial_code,
+                                "files": list(sessions[session_id]["workspace"].keys()),
+                            }
+                        else:
+                            # If files exist but none active/valid, return error
+                            logger.error(
+                                f"EDIT_FILE intent requires a valid activeFile. Provided: '{active_file}'. Existing: {current_files}"
+                            )
+                            response = {
+                                "status": "error",
+                                "error": f"Please select a file to edit. Active file '{active_file}' not found.",
+                                "action": "edit_error",
+                            }
+                    else:
+                        logger.info(
+                            f"Intent: EDIT_FILE. Generating diff for: {active_file}"
+                        )
+                        current_code = sessions[session_id]["workspace"][active_file]
+                        diff_result = agent.generate_based_diff(
+                            current_code=current_code,
+                            prompt=prompt,
+                            context=current_context,
+                            history=current_history,
+                        )
+                        agent_response_log = {
+                            "role": "agent",
+                            "filename": active_file,
+                            "diff": diff_result.get("diff"),
+                        }
+                        response = {
+                            "status": "success",
+                            "action": "diff_generated",  # Specific action for frontend
+                            "filename": active_file,
+                            "diff": diff_result.get("diff"),
+                            "new_code": diff_result.get("new_code"),
+                            "old_code": diff_result.get("old_code"),
+                        }
+
+                # Log messages after processing
+                if user_message_log:
+                    sessions[session_id]["messages"].append(user_message_log)
+                if agent_response_log:
+                    sessions[session_id]["messages"].append(agent_response_log)
+
+            # --- Other Actions (Keep existing logic) ---
             elif action == "upload_file":
                 filename = data.get("filename")
                 content = data.get("content", "")
                 if filename:
                     if filename in sessions[session_id]["workspace"]:
-                        logger.info(
-                            f"Overwriting existing file '{filename}' in workspace."
-                        )
+                        logger.info(f"Overwriting existing file '{filename}'.")
                     else:
-                        logger.info(f"Creating new file '{filename}' in workspace.")
+                        logger.info(f"Creating new file '{filename}'.")
                     sessions[session_id]["workspace"][filename] = content
                     response = {
                         "status": "success",
-                        "action": "upload_file",
+                        "action": "file_uploaded",  # Use different action name
                         "filename": filename,
+                        "files": list(
+                            sessions[session_id]["workspace"].keys()
+                        ),  # Send updated list
                     }
                 else:
                     logger.error("Upload_file action missing filename.")
                     response = {"status": "error", "error": "Missing filename"}
-            elif action == "list_files":
+
+            elif action == "list_files":  # Keep for explicit request if needed
                 files = list(sessions[session_id]["workspace"].keys())
                 logger.info(f"Listing files: {files}")
-                response = {"status": "success", "action": "list_files", "files": files}
+                response = {"status": "success", "action": "file_list", "files": files}
+
             elif action == "read_file":
                 filename = data.get("filename")
                 content = sessions[session_id]["workspace"].get(filename)
                 if content is not None:
-                    logger.info(f"Reading file '{filename}' from workspace.")
+                    logger.info(f"Reading file '{filename}'.")
                     response = {
                         "status": "success",
-                        "action": "read_file",
+                        "action": "file_content",  # Use different action name
                         "filename": filename,
                         "content": content,
                     }
                 else:
                     logger.warning(f"Tried to read non-existent file: {filename}")
                     response = {"status": "error", "error": "File not found"}
+
             elif action == "apply_diff":
                 filename = data.get("filename")
                 diff = data.get("diff", "")
                 if filename and filename in sessions[session_id]["workspace"]:
-                    from unified_diff import apply_patch
+                    from unified_diff import (
+                        apply_patch,  # Keep import local if only used here
+                    )
 
                     current_code = sessions[session_id]["workspace"][filename]
                     try:
+                        # Preprocessing might be needed if agent doesn't format perfectly
                         patch = agent.preprocess_diff(diff)
                         new_code = apply_patch(current_code, patch)
                         logger.info(f"Applying diff to file '{filename}'.")
                         sessions[session_id]["workspace"][filename] = new_code
                         response = {
                             "status": "success",
-                            "action": "apply_diff",
+                            "action": "diff_applied",  # Use different action name
                             "filename": filename,
                             "new_code": new_code,
                         }
                     except Exception as e:
-                        logger.error(f"Patch failed for file '{filename}': {e}")
-                        response = {"status": "error", "error": f"Patch failed: {e}"}
+                        logger.error(
+                            f"Patch failed for file '{filename}': {e}. Diff: {diff!r}"
+                        )
+                        response = {
+                            "status": "error",
+                            "error": f"Patch failed: {e}",
+                            "action": "apply_diff_error",
+                        }
                 else:
                     logger.warning(
-                        f"Tried to apply diff to non-existent file: {filename}"
+                        f"Tried to apply diff to non-existent/invalid file: {filename}"
                     )
-                    response = {"status": "error", "error": "File not found"}
-            elif action == "update_context":
-                context = data.get("context", "")
-                sessions[session_id]["context"].append(context)
-                logger.info(f"Updated context for session {session_id}.")
-                response = {
-                    "status": "success",
-                    "action": "update_context",
-                    "context": sessions[session_id]["context"],
-                }
+                    response = {
+                        "status": "error",
+                        "error": "File not found or invalid for diff",
+                        "action": "apply_diff_error",
+                    }
+
+            # Deprecated generate_diff action? Comment out if replaced by intent logic
+            # elif action == "generate_diff":
+            #    # ... (old logic) ...
+
+            # elif action == "update_context": # Keep if needed
+            #     context = data.get("context", "")
+            #     if context:
+            #         sessions[session_id]["context"].append(context)
+            #         logger.info(f"Updated context for session {session_id}.")
+            #         response = {"status": "success", "action": "context_updated", "context": sessions[session_id]["context"]}
+            #     else:
+            #         response = {"status": "error", "error": "No context provided"}
+
             # Send back structured response
-            logger.info(f"Sending response for action '{action}': {response}")
+            logger.info(f"Sending response: {response}")
             await websocket.send_json(response)
+
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for session {session_id}.")
-        del sessions[session_id]
+        if session_id in sessions:
+            del sessions[session_id]
+    except Exception as e:  # Catch other potential errors in the loop
+        logger.error(
+            f"Unhandled error in WebSocket loop for session {session_id}: {e}",
+            exc_info=True,
+        )
+        # Attempt to inform client before disconnecting or closing
+        try:
+            await websocket.send_json(
+                {"status": "error", "error": f"Internal server error: {e}"}
+            )
+        except:
+            pass  # Ignore if send fails (connection likely already closed)
+        if session_id in sessions:
+            del sessions[session_id]
 
 
 # For local testing
