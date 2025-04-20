@@ -1,171 +1,99 @@
 # Kafka: Vibe-code Agents
 
-Kafka is a next-generation platform for "vibe-coding" AI agents, inspired by tools like Cursor and Windsurf. It enables users—technical or not—to create, iterate, and validate AI agents through natural language and code diffs, powered by a robust Python backend and a modern React/Next.js frontend.
+Kafka allows you to create and modify AI agents using natural language. Describe your agent idea or desired changes, and Kafka handles the code generation, diffing, and validation.
+
+---
+
+## Core Concepts
+
+- **Vibe-Coding**: Build agents by describing them, not by manually writing every line.
+- **Prompt-Driven**: Start by describing your agent. Kafka creates the first file, named intelligently based on your description.
+- **Intent Classification**: Kafka determines if you want to create a new file or edit the current one based on your prompt.
+- **Iterative Development**: Request changes, review the generated diffs, and accept them to evolve your agent.
+- **Validation**: Generated code is automatically validated against the Based specification.
 
 ---
 
 ## Project Structure
 
-```
-.
-├── backend/         # Python FastAPI backend (stateful, websocket-enabled)
-│   ├── agent/       # Core agent logic (LLM, validation, diffing)
-│   ├── validation/  # Validation utilities
-│   ├── tests/       # Backend tests (milestone-driven)
-│   ├── main.py      # Backend entrypoint (FastAPI app)
-│   ├── pyproject.toml  # Python project metadata and dependencies
-│   ├── uv.lock      # uv dependency lockfile
-│   └── ...          # Other backend modules
-├── frontend/        # Next.js/React frontend (modern, feature-rich UI)
-│   ├── app/         # Main app pages and layout
-│   ├── components/  # UI and workspace components (shadcn/ui, Monaco, etc.)
-│   ├── hooks/       # Custom React hooks (e.g., websocket)
-│   ├── lib/         # Utilities (e.g., Monaco setup)
-│   └── ...          # Other frontend modules
-├── SPEC.md          # Full product and milestone specification
-├── .env.example     # Example environment variables
-└── README.md        # This file
-```
+- `backend/`: Python FastAPI server with WebSocket support for the AI agent logic.
+- `frontend/`: Next.js/React UI for interacting with the agent.
 
 ---
 
-## Backend: Python (FastAPI, LangChain, Websockets)
+## Backend (Python)
+
+- Stateful AI agent using LLMs (via LangChain/Google Generative AI).
+- Handles intent classification (Create File vs. Edit File).
+- Generates filenames based on user prompts.
+- Creates and validates Based code and diffs.
+- Real-time communication via WebSockets.
+
+### Setup & Running
+
+1.  **Prerequisites**: Python 3.13+, [`uv`](https://github.com/astral-sh/uv) (recommended).
+2.  **Environment**: Copy `.env.example` to `.env` and add your `GOOGLE_API_KEY`.
+2.  **Install Dependencies**:
+    ```sh
+    cd backend
+    uv venv --python 3.13 # Or your specific 3.13+ patch version
+    source .venv/bin/activate
+    uv sync --locked
+
+    uvicorn main:app --reload --port 8000 # Run 
+    ```
+
+---
+
+## Frontend (Next.js)
 
 ### Features
 
-- **Stateful AI Agent**: Iteratively generates and validates Based code or diffs, using LLMs and a remote validation endpoint.
-- **Unified Diff Application**: Applies code changes using a robust, tested unified diff engine.
-- **Websocket API**: Supports real-time, session-based communication for interactive agent development.
-- **Milestone-Driven Tests**: Comprehensive backend tests for each milestone in `backend/tests/`.
-- **Modern Dependency Management**: Uses [`uv`](https://github.com/astral-sh/uv) for fast, reliable Python dependency management.
+- Modern UI inspired by code editors (File Explorer, Editor, Diff Viewer).
+- Real-time interaction with the backend via WebSockets.
+- Built with Next.js 15, React 19, Tailwind CSS, shadcn/ui, Monaco Editor.
 
-### Requirements
+### Setup & Running
 
-- Python `3.13.3` (see `.python-version`)
-- [`uv`](https://github.com/astral-sh/uv) (recommended for dependency management)
-- Google API key for LLM access (see `.env.example`)
-
-### Setup & Running the Backend
-
-1. **Install `uv` (if not already installed):**
-   ```sh
-   pip install uv
-   ```
-
-2. **Install dependencies:**
-   ```sh
-   cd backend
-   uv venv --python 3.13
-   source .venv/bin/activate
-   uv sync --locked
-   ```
-
-3. **Set up environment variables:**
-   - Copy `.env.example` to `.env` and fill in your `GOOGLE_API_KEY` and any other required secrets.
-
-4. **Run the backend server:**
-   ```sh
-   uv run fastapi run main.py
-   ```
-   - The server will be available at [http://localhost:8000](http://localhost:8000)
-   - For websocket interaction, connect to `ws://localhost:8000/ws`
-
-5. **Run tests:**
-   ```sh
-   uv pip install pytest
-   pytest
-   ```
-
-### Key Backend Components
-
-- **`main.py`**: FastAPI app exposing REST and websocket endpoints for agent interaction.
-- **`agent/agent.py`**: Core agent logic—handles LLM prompts, validation, and diff generation.
-- **`unified_diff.py`**: Unified diff/patch application engine (public domain, robust against malformed diffs).
-- **Validation**: All Based code is validated via the remote endpoint before being accepted.
-- **Communication Protocol**: See [backend/COMM_PROTOCOL.md](backend/COMM_PROTOCOL.md) for full websocket/REST API details.
+1.  **Prerequisites**: Node.js 18+, `pnpm`.
+2.  **Install Dependencies**:
+    ```sh
+    cd frontend
+    pnpm install
+    ```
+3.  **Run**: `pnpm dev`
+    - App available at [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## Frontend: Next.js, React, Tailwind CSS, shadcn/ui, Monaco Editor
+## Communication Protocol
 
-The frontend is a fully functional, modern web app inspired by Cursor/Windsurf, providing a seamless UI for agent creation and iteration.
+Interaction primarily uses WebSockets (`ws://localhost:8000/ws`). Key actions sent **from** the client:
 
-### Features
+- **`prompt`**: The main action. Sends the user's text input. The backend determines the intent (create/edit) and performs the relevant action.
+- **`apply_diff`**: Sent by the client to apply a diff generated by the backend.
+- **`upload_file`, `list_files`, `read_file`**: Used for file management (e.g., auto-save, manual file creation/uploads).
 
-- **Modern UI**: Built with Next.js 15, React 19, Tailwind CSS, shadcn/ui, and Radix UI for a beautiful, accessible experience.
-- **File Explorer**: Browse, create, and select agent files in the workspace.
-- **Monaco-based Editor**: Rich code editing with syntax highlighting and custom theming.
-- **Diff Viewer**: Visualize and review code diffs before applying changes.
-- **Prompt Panel**: Send prompts and context to the agent, with real-time feedback.
-- **Websocket Integration**: Real-time, session-based communication with the backend agent.
-- **Custom Hooks**: Includes `useWebSocket` and `use-toast` for robust state and notification management.
+Key actions sent **to** the client:
 
-### Requirements
+- **`initial_state`**: Sent on connection with the initial file list.
+- **`file_created`**: Sent after the backend creates a new file via a prompt.
+- **`diff_generated`**: Sent with the diff details after an edit request.
+- **`diff_applied`**: Confirms a diff was successfully applied.
+- **`file_list`, `file_content`**: Responses to corresponding client requests.
+- Error actions (e.g., `edit_error`, `apply_diff_error`).
 
-- Node.js 18+
-- pnpm (recommended), npm, or yarn
-
-### Setup & Running the Frontend
-
-1. **Install dependencies:**
-   ```sh
-   cd frontend
-   pnpm install # or npm install or yarn install
-   ```
-
-2. **Run the frontend app:**
-   ```sh
-   pnpm dev # or npm run dev or yarn dev
-   ```
-   - The app will be available at [http://localhost:3000](http://localhost:3000)
-
-### Key Frontend Components
-
-- **`app/page.tsx`**: Main UI logic, state management, and websocket integration.
-- **`components/workspace/`**: Workspace, FileExplorer, Editor, DiffViewer, PromptPanel, etc.
-- **`components/ui/`**: shadcn/ui and Radix UI components for consistent design.
-- **`hooks/useWebSocket.ts`**: Handles websocket connection and messaging.
-- **`lib/monacoSetup.ts`**: Monaco Editor configuration and theming.
+See `backend/COMM_PROTOCOL.md` for more details if needed.
 
 ---
 
-## Backend/Frontend Communication Protocol
+## Future Roadmap
 
-Kafka uses a documented JSON-based websocket protocol for all agent interactions. See [`backend/COMM_PROTOCOL.md`](backend/COMM_PROTOCOL.md) for full details. Key actions include:
-- `prompt`: Generate Based code from a user prompt
-- `generate_diff`: Generate a code diff for a requested change
-- `apply_diff`: Apply a diff to a file
-- `upload_file`, `list_files`, `read_file`: File management
-- `update_context`: Update session context
-
-All actions and responses are per websocket session, enabling real-time, multi-step agent development.
+- **File Management Menus:** Enable full File/Edit/View/Help menu functionality for advanced workspace operations.
+- **User Authentication:** Integrate sign-in and user profiles for personalized agent workspaces.
+- **Manual File Creation & Diff Tools:** Add UI for manual file creation, naming, and diff generation.
+- **Collaboration:** Real-time multi-user editing and agent development.
+- **Plugin/Extension Support:** Allow users to extend agent capabilities with plugins.
+- **Cloud Sync:** Save agents to the cloud.
 
 ---
-
-## Professional Practices
-
-- **Dependency Management**: All Python dependencies are locked with `uv`; Node dependencies are managed with pnpm/npm/yarn.
-- **Environment Variables**: Sensitive keys are never committed; use `.env.example` as a template.
-- **Testing**: Backend logic is covered by milestone-driven unit tests in `backend/tests/`.
-- **Milestone-Driven Development**: See `SPEC.md` for milestone breakdown and progress tracking.
-- **Readable Commits**: Please split changes into logical, well-described commits for review.
-
----
-
-## Contributing
-
-1. Fork the repo and create your feature branch (`git checkout -b feature/your-feature`)
-2. Commit your changes with clear, conventional messages
-3. Push to the branch and open a Pull Request
-
----
-
-## License
-
-This project is licensed under the MIT License.
-
----
-
-## Contact
-
-For questions or demo requests, please open an issue or contact the maintainers.
