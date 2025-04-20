@@ -99,8 +99,8 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
       <div className="flex items-end justify-between mt-1">
         <div className="flex items-center gap-2">
           <TooltipProvider>
-            {/* <Tooltip>
-              <TooltipTrigger asChild> */}
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -111,26 +111,20 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
                   <Plus className="h-4 w-4" />
                   {showContext ? 'Hide context' : 'Add context'}
                 </Button>
-              {/* </TooltipTrigger>
-              <TooltipContent>Add extra context to guide the AI</TooltipContent>
-            </Tooltip> */}
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <HelpModal>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="flex items-center gap-1 px-2"
-                    disabled={isProcessing}
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                    Help
-                  </Button>
-                </HelpModal>
               </TooltipTrigger>
-              <TooltipContent>How to use Kafka</TooltipContent>
             </Tooltip>
+
+            <HelpModal>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-1 px-2"
+                disabled={isProcessing}
+              >
+                <HelpCircle className="h-4 w-4" />
+                Help
+              </Button>
+            </HelpModal>
 
           </TooltipProvider>
         </div>

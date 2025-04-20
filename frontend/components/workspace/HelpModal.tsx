@@ -22,7 +22,7 @@ export function HelpModal({ children }: HelpModalProps) {
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
+      <DialogContent className="sm:max-w-[525px] z-[60]">
         <DialogHeader>
           <DialogTitle>How Kafka Works</DialogTitle>
           <DialogDescription>

@@ -196,6 +196,11 @@ export default function Home() {
            filename: fileToSave,
            content: currentContent,
        });
+       // Auto-save toast
+       toast({
+        title: 'File saved',
+        description: `${fileToSave} has been saved.`,
+       });
     }
 
     // Switch to new file and load its content
@@ -249,6 +254,11 @@ export default function Home() {
           return newStates;
         });
     }
+
+    toast({
+      title: 'File saved',
+      description: `${filename} has been saved.`,
+     });
   };
 
   return (
