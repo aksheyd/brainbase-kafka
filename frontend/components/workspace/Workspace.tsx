@@ -18,6 +18,8 @@ type WorkspaceProps = {
   sendMessage: (message: any) => void;
   validationError?: string | null;
   onEditorValueChange?: (value: string) => void;
+  isProcessing: boolean;
+  isDiffPending: boolean;
 };
 
 export function Workspace({ 
@@ -31,7 +33,9 @@ export function Workspace({
   onSave, 
   sendMessage, 
   validationError, 
-  onEditorValueChange 
+  onEditorValueChange,
+  isProcessing,
+  isDiffPending
 }: WorkspaceProps) {
   const [internalValue, setInternalValue] = useState(editorValue);
 
@@ -40,18 +44,25 @@ export function Workspace({
     setInternalValue(editorValue);
   }, [editorValue, filename]);
 
+  // Determine if the editor/save actions should be locked
+  const isLocked = isProcessing || isDiffPending;
+
   const handleEditorChange = (value: string) => {
-    setInternalValue(value);
-    if (onEditorValueChange) onEditorValueChange(value);
+    // Only allow changes if not locked
+    if (!isLocked) {
+      setInternalValue(value);
+      if (onEditorValueChange) onEditorValueChange(value);
+    }
   };
 
   const handleSave = () => {
-    if (filename) {
+    if (filename && !isLocked) { // Check lock before saving
       onSave(filename, internalValue);
     }
   };
 
   const handleDiffAccept = () => {
+    if (isProcessing) return; // Don't accept if backend is busy elsewhere
     sendMessage({
       action: 'apply_diff',
       filename,
@@ -61,6 +72,7 @@ export function Workspace({
   };
 
   const handleDiffReject = () => {
+    if (isProcessing) return; // Don't reject if backend is busy elsewhere
     onClearDiff();
   };
 
@@ -82,6 +94,7 @@ export function Workspace({
                     size="sm"
                     className="h-7 gap-1"
                     onClick={handleDiffReject}
+                    disabled={isProcessing}
                   >
                     <X className="h-3.5 w-3.5" />
                     Reject
@@ -91,6 +104,7 @@ export function Workspace({
                     size="sm"
                     className="h-7 gap-1"
                     onClick={handleDiffAccept}
+                    disabled={isProcessing}
                   >
                     <Check className="h-3.5 w-3.5" />
                     Accept
@@ -122,6 +136,7 @@ export function Workspace({
                   size="sm"
                   className="h-7"
                   onClick={handleSave}
+                  disabled={isLocked}
                 >
                   Save
                 </Button>
@@ -131,6 +146,7 @@ export function Workspace({
                   value={internalValue}
                   onChange={handleEditorChange}
                   language="based"
+                  options={{ readOnly: isLocked }}
                 />
               </div>
             </div>

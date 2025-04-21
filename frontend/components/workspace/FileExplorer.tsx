@@ -5,17 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Folder, File } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from "@/components/ui/scroll-area";
 
-type FileExplorerProps = {
+interface FileExplorerProps {
   files: string[];
   activeFile: string | null;
   onSelectFile: (filename: string) => void;
-};
+  isLocked: boolean;
+}
 
 export function FileExplorer({
   files,
   activeFile,
   onSelectFile,
+  isLocked,
 }: FileExplorerProps) {
   return (
     <div className="h-full flex flex-col bg-background">
@@ -33,13 +36,14 @@ export function FileExplorer({
           {files.map((file) => (
             <button
               key={file}
+              onClick={() => !isLocked && onSelectFile(file)}
+              disabled={isLocked}
               className={cn(
                 "w-full flex items-center px-2 py-1 text-xs rounded-sm text-left gap-1.5",
                 activeFile === file
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-accent/50 hover:text-accent-foreground"
               )}
-              onClick={() => onSelectFile(file)}
             >
               <File className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{file}</span>

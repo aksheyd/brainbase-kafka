@@ -8,9 +8,10 @@ interface EditorProps {
   value: string;
   onChange: (value: string) => void;
   language?: string;
+  options?: Record<string, any>;
 }
 
-export function Editor({ value, onChange, language = 'based' }: EditorProps) {
+export function Editor({ value, onChange, language = 'based', options }: EditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Use the shared setup function
@@ -37,6 +38,7 @@ export function Editor({ value, onChange, language = 'based' }: EditorProps) {
           lineNumbers: 'on',
           tabSize: 2,
           renderLineHighlight: 'all',
+          ...options,
         }}
       />
     </div>

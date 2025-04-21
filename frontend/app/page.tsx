@@ -358,6 +358,10 @@ export default function Home() {
       });
   }, [toast]);
 
+  // Determine if the UI should be locked
+  const isDiffPending = !!(activeFile && diffStates[activeFile]);
+  const isUiLocked = isProcessing || isDiffPending;
+
   // Determine current content to display (editor value or original if diff exists)
   const currentFileContent = activeFile ? (diffStates[activeFile]?.old_code ?? editorValues[activeFile] ?? '') : '';
   const currentDiff = activeFile ? diffStates[activeFile]?.diff : null;
@@ -373,6 +377,7 @@ export default function Home() {
             files={files}
             activeFile={activeFile}
             onSelectFile={handleFileSelect}
+            isLocked={isUiLocked}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />
@@ -393,6 +398,8 @@ export default function Home() {
                 sendMessage={stableSendMessage} 
                 onClearDiff={() => { if(activeFile) handleClearDiff(activeFile); }}
                 validationError={validationError} 
+                isProcessing={isProcessing} 
+                isDiffPending={isDiffPending}
               />
         </ResizablePanel>
         <ResizableHandle withHandle />
@@ -408,7 +415,7 @@ export default function Home() {
        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-3xl px-4 z-50">
           <PromptPanel
             onSubmit={handlePromptSubmit}
-            isProcessing={isProcessing}
+            isLocked={isUiLocked}
           />
        </div>
 

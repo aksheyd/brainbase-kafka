@@ -4,16 +4,17 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, HelpCircle, Plus, Loader2 } from 'lucide-react';
+import { Send, HelpCircle, Plus, Loader2, SendHorizonal } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpModal } from './HelpModal';
 
-type PromptPanelProps = {
+interface PromptPanelProps {
   onSubmit: (prompt: string, context?: string) => void;
   isProcessing?: boolean;
-};
+  isLocked: boolean;
+}
 
-export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps) {
+export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: PromptPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const [showContext, setShowContext] = useState(false);
   const [contextValue, setContextValue] = useState('');
@@ -27,7 +28,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
   }, []);
 
   const handleSubmit = () => {
-    if (!inputValue.trim() || isProcessing) return;
+    if (!inputValue.trim() || isProcessing || isLocked) return;
     
     onSubmit(inputValue, showContext ? contextValue : undefined);
     
@@ -59,7 +60,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
         onKeyDown={handleKeyDown}
         placeholder={isProcessing ? "AI is thinking..." : "Ask a question, make a change, go wild..."}
         className="rounded-full px-5 py-2 text-base shadow-sm border border-input focus:ring-2 focus:ring-ring focus:outline-none transition-all"
-        disabled={isProcessing}
+        disabled={isProcessing || isLocked}
       />
       
       {/* Context area (optional) */}
@@ -69,7 +70,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
           onChange={e => setContextValue(e.target.value)}
           placeholder="Add context for your prompt (optional)"
           className="mt-2 rounded-md border border-input min-h-[60px] max-h-[120px] text-sm"
-          disabled={isProcessing}
+          disabled={isProcessing || isLocked}
         />
       )}
       
@@ -84,7 +85,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
                   size="sm"
                   className="flex items-center gap-1 px-2"
                   onClick={() => setShowContext(v => !v)}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isLocked}
                 >
                   <Plus className="h-4 w-4" />
                   {showContext ? 'Hide context' : 'Add context'}
@@ -97,7 +98,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
                 variant="ghost"
                 size="sm"
                 className="flex items-center gap-1 px-2"
-                disabled={isProcessing}
+                disabled={isProcessing || isLocked}
               >
                 <HelpCircle className="h-4 w-4" />
                 Help
@@ -112,7 +113,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
           size="lg"
           className="flex items-center gap-2 px-6 rounded-full"
           onClick={handleSubmit}
-          disabled={!inputValue.trim() || isProcessing}
+          disabled={!inputValue.trim() || isProcessing || isLocked}
         >
           {isProcessing ? (
             <>
@@ -122,7 +123,7 @@ export function PromptPanel({ onSubmit, isProcessing = false }: PromptPanelProps
           ) : (
             <>
               Send
-              <Send className="h-4 w-4" />
+              <SendHorizonal className="h-4 w-4" />
             </>
           )}
         </Button>
