@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-
+import { useToast } from '@/hooks/use-toast';
 type WebSocketMessage = {
   action: string;
   [key: string]: any;
@@ -10,6 +10,7 @@ type WebSocketMessage = {
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export function useWebSocket() {
+  const { toast } = useToast();
   const wsRef = useRef<WebSocket | null>(null);
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -24,8 +25,14 @@ export function useWebSocket() {
     ws.onopen = () => setConnectionStatus('connected');
     ws.onclose = () => {
       setConnectionStatus('disconnected');
+
+      toast({
+        title: "Connection Lost",
+        description: "Connection to server lost. Attempting to reconnect in  5 seconds...",
+        variant: "destructive",
+      });
       // Try to reconnect after a short delay
-      reconnectTimeout.current = setTimeout(connect, 2000);
+      reconnectTimeout.current = setTimeout(connect, 50000);
     };
     ws.onerror = () => setConnectionStatus('disconnected');
     ws.onmessage = (event) => setLastMessage(event.data);
