@@ -29,6 +29,7 @@ You can run both the backend and frontend servers together using the provided sc
 
 
 ```sh
+chmod +x run_kafka.sh
 ./run_kafka.sh
 ```
 
@@ -55,9 +56,9 @@ This will start both servers in the correct directories and shut them down clean
     source .venv/bin/activate
     uv sync --locked
     ```
-4. **Run**: 
-    `uv run fastapi dev main.py` for debugging
-    `uv run uvicorn main:app --port 8000` for "prod" (ideally wrap gunicorn and nginx and hard install uvicorn)
+4. **Run** (or use `./run_kafka`): 
+    - `uv run fastapi dev main.py` for debugging
+    - `uv run uvicorn main:app --port 8000` for "prod" (ideally wrap gunicorn and nginx and hard install uvicorn)
     - Endpoint at [http://localhost:8000](http://localhost:8000)
 ---
 
@@ -77,9 +78,9 @@ This will start both servers in the correct directories and shut them down clean
     cd frontend
     pnpm install
     ```
-3.  **Run**: 
-    `pnpm dev` for debugging
-    `pnpm build && npx serve@latest out` for "prod"
+3.  **Run** (or use `./run_kafka`): 
+    - `pnpm dev` for debugging
+    - `pnpm build && npx serve@latest out` for "prod"
     - App at [http://localhost:3000](http://localhost:3000)
 ---
 
