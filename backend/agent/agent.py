@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import sys
 
 import requests
@@ -21,7 +22,6 @@ with open(BASED_GUIDE_PATH, "r") as f:
 STRICT_INSTRUCTION = (
     "\n\nIMPORTANT: At all times, your output must be valid Based code only. "
     "Do not include explanations, comments, or any text outside of Based code blocks."
-    "Always use Based looping and avoid While True loops."
 )
 
 VALIDATION_URL = "https://brainbase-engine-python.onrender.com/validate"
@@ -55,9 +55,6 @@ class BasedAgent:
 
     def strip_code_blocks(self, text: str) -> str:
         # Remove all triple backtick code block formatting
-        import re
-
-        # Remove ``` and optional language specifier
         return re.sub(r"```[a-zA-Z]*\n?|```", "", text)
 
     def classify_prompt_intent(
@@ -78,8 +75,15 @@ class BasedAgent:
                 if msg.get("role") == "user":
                     formatted.append(f"User: {msg.get('prompt', '')}")
                 elif msg.get("role") == "agent":
+                    agent_content = (
+                        "[Generated initial code]"
+                        if msg.get("code")
+                        else "[Generated diff]"
+                        if msg.get("diff")
+                        else msg.get("response", "[Agent response]")
+                    )
                     formatted.append(
-                        f"Agent: {msg.get('code', '') or msg.get('diff', '') or msg.get('response', '')}"
+                        f"Agent: {agent_content} for file {msg.get('filename', 'N/A')}"
                     )
             if formatted:
                 history_str = "\\n\\nConversation history:\\n" + "\\n".join(formatted)
@@ -206,7 +210,16 @@ class BasedAgent:
                 if msg.get("role") == "user":
                     formatted.append(f"User: {msg.get('prompt', '')}")
                 elif msg.get("role") == "agent":
-                    formatted.append(f"Agent: {msg.get('code', '')}")
+                    agent_content = (
+                        "[Generated initial code]"
+                        if msg.get("code")
+                        else "[Generated diff]"
+                        if msg.get("diff")
+                        else msg.get("response", "[Agent response]")
+                    )
+                    formatted.append(
+                        f"Agent: {agent_content} for file {msg.get('filename', 'N/A')}"
+                    )
             if formatted:
                 history_str = "\n\nConversation history:\n" + "\n".join(formatted)
         context_str = ""
@@ -281,7 +294,16 @@ class BasedAgent:
                 if msg.get("role") == "user":
                     formatted.append(f"User: {msg.get('prompt', '')}")
                 elif msg.get("role") == "agent":
-                    formatted.append(f"Agent: {msg.get('code', '')}")
+                    agent_content = (
+                        "[Generated initial code]"
+                        if msg.get("code")
+                        else "[Generated diff]"
+                        if msg.get("diff")
+                        else msg.get("response", "[Agent response]")
+                    )
+                    formatted.append(
+                        f"Agent: {agent_content} for file {msg.get('filename', 'N/A')}"
+                    )
             if formatted:
                 history_str = "\n\nConversation history:\n" + "\n".join(formatted)
         context_str = ""
