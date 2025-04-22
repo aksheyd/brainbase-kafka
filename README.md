@@ -21,6 +21,21 @@ Kafka allows you to create and modify AI agents using natural language. Describe
 
 ---
 
+## Quick Start
+
+You can run both the backend and frontend servers together using the provided script:
+
+> ⚠️ If you have not setup and installed the dependencies (below) first, the script will not work correctly.
+
+
+```sh
+./run_kafka.sh
+```
+
+This will start both servers in the correct directories and shut them down cleanly when you exit the script.
+
+---
+
 ## Backend (Python)
 
 - Stateful AI agent using LLMs (via LangChain/Google Generative AI).
@@ -33,16 +48,17 @@ Kafka allows you to create and modify AI agents using natural language. Describe
 
 1.  **Prerequisites**: Python 3.13+, [`uv`](https://github.com/astral-sh/uv) (recommended).
 2.  **Environment**: Copy `.env.example` to `.env` and add your `GOOGLE_API_KEY`.
-2.  **Install Dependencies**:
+3.  **Install Dependencies**:
     ```sh
     cd backend
     uv venv --python 3.13 # Or your specific 3.13+ patch version
     source .venv/bin/activate
     uv sync --locked
-
-    uvicorn main:app --reload --port 8000 # Run 
     ```
-
+4. **Run**: 
+    `uv run fastapi dev main.py` for debugging
+    `uv run uvicorn main:app --port 8000` for "prod" (ideally wrap gunicorn and nginx and hard install uvicorn)
+    - Endpoint at [http://localhost:8000](http://localhost:8000)
 ---
 
 ## Frontend (Next.js)
@@ -61,9 +77,10 @@ Kafka allows you to create and modify AI agents using natural language. Describe
     cd frontend
     pnpm install
     ```
-3.  **Run**: `pnpm dev`
-    - App available at [http://localhost:3000](http://localhost:3000)
-
+3.  **Run**: 
+    `pnpm dev` for debugging
+    `pnpm build && npx serve@latest out` for "prod"
+    - App at [http://localhost:3000](http://localhost:3000)
 ---
 
 ## Communication Protocol
@@ -83,7 +100,7 @@ Key actions sent **to** the client:
 - **`file_list`, `file_content`**: Responses to corresponding client requests.
 - Error actions (e.g., `edit_error`, `apply_diff_error`).
 
-See `backend/COMM_PROTOCOL.md` for more details if needed.
+For more details, see the [backend/COMM_PROTOCOL.md](backend/COMM_PROTOCOL.md) file.
 
 ---
 
