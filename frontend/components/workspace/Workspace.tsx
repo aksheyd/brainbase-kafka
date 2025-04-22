@@ -121,7 +121,7 @@ export function Workspace({
                 <DiffViewer 
                   original={original} 
                   modified={modified} 
-                  language="python" 
+                  language="based" 
                   originalLabel="Current Code"
                   modifiedLabel="Proposed Changes"
                 />

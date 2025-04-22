@@ -136,7 +136,7 @@ export default function Home() {
         }));
         setIsProcessing(false);
         // Optional: Add a system message to chat
-        setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Created file: ${data.filename}` }]); // Restore chat state update
+        setChatMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Created file: ${data.filename}` }]); // Restore chat state update
         break;
 
       case 'diff_generated': // AI generated a diff for the active file
@@ -150,7 +150,7 @@ export default function Home() {
              }
            }));
            // Add system message to chat
-           setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Diff generated for ${data.filename}. Review the changes.` }]);
+           setChatMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Diff generated for ${data.filename}. Review the changes.` }]);
         }
         setIsProcessing(false);
         break;
@@ -169,7 +169,7 @@ export default function Home() {
             [data.filename]: data.new_code ?? ''
           }));
           // Add system message to chat
-          setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Changes applied to ${data.filename}.` }]);
+          setChatMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Changes applied to ${data.filename}.` }]);
            // Toast is deferred
            setTimeout(() => {
                 toast({ title: "Diff Applied", description: `Changes applied to ${data.filename}` });
@@ -234,19 +234,24 @@ export default function Home() {
   }, [activeFile, isProcessing, editorValues, diffStates, stableSendMessage, toast]);
 
   // Handles prompt submission from PromptPanel
-  const handlePromptSubmit = useCallback((prompt: string) => {
+  const handlePromptSubmit = useCallback((prompt: string, context?: string) => {
     if (!prompt.trim() || isProcessing) return;
 
     setIsProcessing(true);
     setValidationError(null); 
     // Add user prompt to chat display
-    setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: prompt }]); // Restore chat state update
-
+    setChatMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: prompt }]); // Restore chat state update
+    if (context) {
+      setChatMessages(prev => [...prev, {id: crypto.randomUUID(), role: 'agent', content: "Hmm... " + context}]);
+    }
+    
     stableSendMessage({
       action: 'prompt',
       prompt: prompt.trim(),
       activeFile: activeFile, 
+      context,
     });
+  
   }, [isProcessing, activeFile, stableSendMessage]);
 
  // For manual file creation (e.g., File > New or explorer button)
@@ -334,7 +339,7 @@ export default function Home() {
     if (!diffStates[filename]?.diff || isProcessing) return;
 
     // Add system message before sending request
-    setChatMessages(prev => [...prev, { id: Date.now().toString(), role: 'system', content: `Applying changes to ${filename}...` }]);
+    setChatMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Applying changes to ${filename}...` }]);
     setIsProcessing(true); // Indicate processing for diff application
     stableSendMessage({
       action: 'apply_diff',
