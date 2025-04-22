@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, HelpCircle, Plus, Loader2, SendHorizonal } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Send, HelpCircle, Plus, Loader2 } from 'lucide-react';
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { HelpModal } from './HelpModal';
 
 interface PromptPanelProps {
@@ -14,6 +14,7 @@ interface PromptPanelProps {
   isLocked: boolean;
 }
 
+// Prompt panel on bottom of screen 
 export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: PromptPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const [showContext, setShowContext] = useState(false);
@@ -29,14 +30,14 @@ export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: Prompt
 
   const handleSubmit = () => {
     if (!inputValue.trim() || isProcessing || isLocked) return;
-    
+
     onSubmit(inputValue, showContext ? contextValue : undefined);
-    
+
     // Clear inputs after submission
     setInputValue('');
     setContextValue('');
     setShowContext(false);
-    
+
     // Refocus the input field
     setTimeout(() => {
       if (inputRef.current && !isProcessing) inputRef.current.focus();
@@ -62,7 +63,7 @@ export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: Prompt
         className="rounded-full px-5 py-2 text-base shadow-sm border border-input focus:ring-2 focus:ring-ring focus:outline-none transition-all"
         disabled={isProcessing || isLocked}
       />
-      
+
       {/* Context area (optional) */}
       {showContext && (
         <Textarea
@@ -73,7 +74,7 @@ export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: Prompt
           disabled={isProcessing || isLocked}
         />
       )}
-      
+
       {/* Controls */}
       <div className="flex items-end justify-between mt-1">
         <div className="flex items-center gap-2">
@@ -107,7 +108,7 @@ export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: Prompt
 
           </TooltipProvider>
         </div>
-        
+
         <Button
           variant="default"
           size="lg"
@@ -123,7 +124,7 @@ export function PromptPanel({ onSubmit, isProcessing = false, isLocked }: Prompt
           ) : (
             <>
               Send
-              <SendHorizonal className="h-4 w-4" />
+              <Send className="h-4 w-4" />
             </>
           )}
         </Button>

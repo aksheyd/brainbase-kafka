@@ -8,14 +8,19 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogFooter,
-  DialogClose, // Added for close button
+  DialogClose,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 
-interface HelpModalProps {
-  children: React.ReactNode; // The trigger element (e.g., the Help button)
-}
+type HelpModalProps = {
+  /** The trigger element that opens the modal. */
+  children: React.ReactNode;
+};
 
+/**
+ * A modal dialog component that displays help information and usage instructions for Kafka.
+ * It uses Shadcn's Dialog component.
+ */
 export function HelpModal({ children }: HelpModalProps) {
   return (
     <Dialog>
@@ -42,19 +47,19 @@ export function HelpModal({ children }: HelpModalProps) {
               With a file open, describe the changes you want (e.g., "Change the greeting message", "Add a function to ask for the user's name"). Kafka will generate a diff (code changes) for the active file.
             </p>
           </div>
-           <div className="grid gap-1">
+          <div className="grid gap-1">
             <h4 className="font-medium">3. Applying Changes (Diffs)</h4>
             <p className="text-muted-foreground">
               Review the suggested changes in the diff viewer. Click "Accept" to apply them to your code, or "Reject" to discard them. You can then refine your request in the prompt bar.
             </p>
           </div>
-           <div className="grid gap-1">
-             <h4 className="font-medium">4. Creating Additional Files</h4>
-             <p className="text-muted-foreground">
-               To create more files for organization (e.g., utility functions, different agent parts), explicitly ask in the prompt: "Create a new file for database utilities" or "Make an agent file to handle user profiles". Kafka will create and name the new file.
-             </p>
+          <div className="grid gap-1">
+            <h4 className="font-medium">4. Creating Additional Files</h4>
+            <p className="text-muted-foreground">
+              To create more files for organization (e.g., utility functions, different agent parts), explicitly ask in the prompt: "Create a new file for database utilities" or "Make an agent file to handle user profiles". Kafka will create and name the new file.
+            </p>
           </div>
-           <div className="grid gap-1">
+          <div className="grid gap-1">
             <h4 className="font-medium">Adding Context</h4>
             <p className="text-muted-foreground">
               Use the "Add context" button to provide extra details, examples, or instructions to help the AI better understand your requests, especially for complex changes or new files.
@@ -63,12 +68,12 @@ export function HelpModal({ children }: HelpModalProps) {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-             <Button type="button" variant="secondary">
-                Got it!
-             </Button>
+            <Button type="button" variant="secondary">
+              Got it!
+            </Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
-} 
+}

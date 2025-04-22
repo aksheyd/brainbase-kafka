@@ -1,11 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Folder, File } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface FileExplorerProps {
   files: string[];
@@ -14,6 +10,8 @@ interface FileExplorerProps {
   isLocked: boolean;
 }
 
+// Simple File explorer on left side of screen
+// Locked when AI is processing or diff is being shown to prevent race conditions
 export function FileExplorer({
   files,
   activeFile,
@@ -25,13 +23,13 @@ export function FileExplorer({
       <div className="flex items-center justify-between p-2 border-b border-border">
         <h2 className="text-sm font-medium">EXPLORER</h2>
       </div>
-      
+
       <div className="px-1 py-2">
         <div className="flex items-center text-xs text-muted-foreground gap-1 pl-2 py-1">
           <Folder className="h-3.5 w-3.5" />
           <span>WORKSPACE</span>
         </div>
-        
+
         <div className="space-y-0.5 mt-1">
           {files.map((file) => (
             <button
@@ -49,7 +47,7 @@ export function FileExplorer({
               <span className="truncate">{file}</span>
             </button>
           ))}
-          
+
           {files.length === 0 && (
             <div className="px-2 py-3 text-xs text-muted-foreground">
               Use the chat to create your first file!

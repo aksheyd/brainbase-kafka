@@ -6,33 +6,54 @@ import { DiffViewer } from '@/components/workspace/DiffViewer';
 import { Button } from '@/components/ui/button';
 import { Check, X } from 'lucide-react';
 
+/**
+ * Props for the Workspace component.
+ */
 type WorkspaceProps = {
+  /** The name of the currently active file, or null if none is active. */
   filename: string | null;
+  /** The original content of the file (used when a diff is pending). */
   content: string;
+  /** The current value/content within the editor component. */
   editorValue: string;
+  /** The unified diff string, or null if no diff is pending. */
   diff: string | null;
+  /** The code content before the diff changes (optional). */
   oldCode?: string | null;
+  /** The code content after the diff changes (optional). */
   newCode?: string | null;
+  /** Callback function to clear the pending diff for the current file. */
   onClearDiff: () => void;
+  /** Callback function to save the content of a file. */
   onSave: (filename: string, content: string) => void;
+  /** Function to send messages via the WebSocket connection. */
   sendMessage: (message: any) => void;
+  /** An error message related to code validation or processing, if any. */
   validationError?: string | null;
+  /** Callback function triggered when the editor's content changes. */
   onEditorValueChange?: (value: string) => void;
+  /** Boolean indicating if an AI operation is currently in progress. */
   isProcessing: boolean;
+  /** Boolean indicating if a diff is generated and waiting for user review. */
   isDiffPending: boolean;
 };
 
-export function Workspace({ 
-  filename, 
-  content, 
-  editorValue, 
-  diff, 
-  oldCode, 
-  newCode, 
-  onClearDiff, 
-  onSave, 
-  sendMessage, 
-  validationError, 
+/**
+ * Renders the main workspace area, including the code editor and diff viewer.
+ * It displays either the standard editor or a diff view based on the `isDiffPending` state.
+ * Provides controls for accepting or rejecting diffs.
+ */
+export function Workspace({
+  filename,
+  content,
+  editorValue,
+  diff,
+  oldCode,
+  newCode,
+  onClearDiff,
+  onSave,
+  sendMessage,
+  validationError,
   onEditorValueChange,
   isProcessing,
   isDiffPending
@@ -118,10 +139,10 @@ export function Workspace({
                 </div>
               )}
               <div className="flex-1 overflow-auto">
-                <DiffViewer 
-                  original={original} 
-                  modified={modified} 
-                  language="based" 
+                <DiffViewer
+                  original={original}
+                  modified={modified}
+                  language="based"
                   originalLabel="Current Code"
                   modifiedLabel="Proposed Changes"
                 />

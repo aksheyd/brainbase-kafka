@@ -2,13 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-type WebSocketMessage = {
-  action: string;
-  [key: string]: any;
-};
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
+// Provides connect, sendMessage, lastMessage, and connectionStatus
 export function useWebSocket() {
   const { toast } = useToast();
   const wsRef = useRef<WebSocket | null>(null);
@@ -16,6 +13,7 @@ export function useWebSocket() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  // Establishes a new WebSocket connection (with auto-reconnect)
   const connect = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
     setConnectionStatus('connecting');
@@ -38,12 +36,14 @@ export function useWebSocket() {
     ws.onmessage = (event) => setLastMessage(event.data);
   }, []);
 
+  // Sends a JSON-encoded message if the socket is open
   const sendMessage = useCallback((msg: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
     }
   }, []);
 
+  // Connect on mount, clean up on unmount
   useEffect(() => {
     connect();
     return () => {
