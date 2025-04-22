@@ -2,15 +2,40 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Menu, Code, Github, Brain } from 'lucide-react';
+import { Menu, Code, Github, Brain, GitBranch, Wifi, WifiOff, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type HeaderProps = {
-  connectionStatus: 'connecting' | 'connected' | 'disconnected';
-};
+type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
-export function Header({ connectionStatus }: HeaderProps) {
+interface HeaderProps {
+  connectionStatus: ConnectionStatus;
+  isProcessing: boolean;
+  isDiffPending: boolean;
+}
+
+export function Header({ connectionStatus, isProcessing, isDiffPending }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const getStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connected':
+        return 'bg-green-500/10 text-green-400';
+      case 'connecting':
+        return 'bg-yellow-500/10 text-yellow-400';
+      case 'disconnected':
+        return 'bg-red-500/10 text-red-400';
+    }
+  };
+
+  const StatusIcon = connectionStatus === 'connected' ? Wifi : connectionStatus === 'connecting' ? Loader2 : WifiOff;
+  const statusText = connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected';
+
+  let activityStatus = '';
+  if (isProcessing) {
+    activityStatus = 'Processing (Editor locked)...';
+  } else if (isDiffPending) {
+    activityStatus = 'Review pending changes';
+  }
 
   return (
     <header className="flex h-14 items-center border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
@@ -35,11 +60,18 @@ export function Header({ connectionStatus }: HeaderProps) {
       </nav>
       
       <div className="hidden md:flex items-center ml-auto gap-2">
+        {/* Activity Status */}
+        {activityStatus && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>{activityStatus}</span>
+          </div>
+        )}
+        
+        {/* Connection Status */}
         <div className={cn(
           "flex items-center gap-2 text-xs px-3 py-1 rounded-full",
-          connectionStatus === 'connected' ? "bg-green-500/10 text-green-400" : 
-          connectionStatus === 'connecting' ? "bg-yellow-500/10 text-yellow-400" : 
-          "bg-red-500/10 text-red-400"
+          getStatusColor()
         )}>
           <div className={cn(
             "w-2 h-2 rounded-full",
@@ -47,9 +79,7 @@ export function Header({ connectionStatus }: HeaderProps) {
             connectionStatus === 'connecting' ? "bg-yellow-400" : 
             "bg-red-400"
           )} />
-          {connectionStatus === 'connected' ? "Connected" : 
-           connectionStatus === 'connecting' ? "Connecting..." : 
-           "Disconnected"}
+          {statusText}
         </div>
         
         <Button variant="outline" size="sm" className="gap-1">

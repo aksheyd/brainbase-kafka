@@ -368,7 +368,11 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header connectionStatus={connectionStatus} />
+      <Header 
+        connectionStatus={connectionStatus} 
+        isProcessing={isProcessing}
+        isDiffPending={isDiffPending}
+      />
       {/* Outer horizontal group: Explorer | Workspace | Chat */}
       <ResizablePanelGroup direction="horizontal" className="flex-1 border-t">
         {/* Left Panel: File Explorer */}
