@@ -1,7 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
-import MonacoEditor from '@monaco-editor/react';
+import MonacoEditor, { Monaco } from '@monaco-editor/react';
 import { setupMonaco } from '@/lib/monacoSetup'; // Import the setup function
 
 interface EditorProps {
@@ -11,11 +10,9 @@ interface EditorProps {
   options?: Record<string, any>;
 }
 
+// Use Monaco editor with 'based' language and theme
 export function Editor({ value, onChange, language = 'based', options }: EditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
-
-  // Use the shared setup function
-  function handleBeforeMount(monaco: any) {
+  function handleBeforeMount(monaco: Monaco) {
     setupMonaco(monaco);
   }
 

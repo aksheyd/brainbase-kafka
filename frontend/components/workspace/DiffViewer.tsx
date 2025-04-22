@@ -1,6 +1,6 @@
 'use client';
 
-import { DiffEditor } from '@monaco-editor/react';
+import { DiffEditor, Monaco } from '@monaco-editor/react';
 import { setupMonaco } from '@/lib/monacoSetup';
 
 interface DiffViewerProps {
@@ -11,6 +11,7 @@ interface DiffViewerProps {
   modifiedLabel?: string;
 }
 
+// Use monaco's diff editor to view created diffs 
 export function DiffViewer({ 
   original, 
   modified, 
@@ -24,7 +25,7 @@ export function DiffViewer({
     );
   }
 
-  function handleBeforeMount(monaco: any) {
+  function handleBeforeMount(monaco: Monaco) {
     setupMonaco(monaco);
   }
 
